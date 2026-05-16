@@ -171,8 +171,13 @@ async def handle_message(sender_id: str, data: dict):
         
         # Extract location data from the nested 'data' field (LocationData object)
         loc_obj = data.get("data", {})
+        log.info(f"DEBUG loc_obj type={type(loc_obj).__name__}, value={json.dumps(loc_obj, ensure_ascii=False, default=str)[:300]}")
+        log.info(f"DEBUG data keys={list(data.keys())}")
         if isinstance(loc_obj, dict):
-            address_text = loc_obj.get("endPoint") or loc_obj.get("locationInfo") or loc_obj.get("roadAddress") or loc_obj.get("addressName") or ""
+            address_text = loc_obj.get("endPoint") or loc_obj.get("locationInfo") or ""
+            log.info(f"DEBUG address_text from endPoint='{address_text}'")
+            if not address_text:
+                log.info(f"DEBUG loc_obj has keys: {list(loc_obj.keys())}")
             location_name = loc_obj.get("locationInfo") or loc_obj.get("mapName") or loc_obj.get("endPoint") or ""
         else:
             address_text = str(loc_obj)

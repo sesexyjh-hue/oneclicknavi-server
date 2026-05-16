@@ -125,14 +125,48 @@ async def handle_message(sender_id: str, data: dict):
             ws = clients[sender_id]["ws"]
             await ws.send_json({"type": "registered", "device_id": device_id, "role": role})
 
+        # Auto-pair: pair this device with existing devices of same email
+        if role in ("sender", "receiver"):
+            paired_role = "receiver" if role == "sender" else "sender"
+            if email not in pairs:
+                pairs[email] = set()
+            paired_count = 0
+            for cid, info in list(clients.items()):
+                if cid != sender_id and info.get("email") == email and info.get("role") == paired_role:
+                    if cid not in pairs.get(email, set()):
+                        pairs[email].add(cid)
+                        paired_count += 1
+            if paired_count > 0:
+                log.info(f"Auto-paired {role} {sender_id} -> {paired_count} {paired_role}(s) (email={email})")
+
+        await broadcast_status()
+
     elif msg_type == "register_sender":
         if sender_id in clients:
             clients[sender_id]["role"] = "sender"
+        # Auto-pair: find receivers with same email and add to pair set
+        client_email = clients.get(sender_id, {}).get("email", email)
+        if client_email not in pairs:
+            pairs[client_email] = set()
+        for cid, info in list(clients.items()):
+            if cid != sender_id and info.get("email") == client_email and info.get("role") == "receiver":
+                pairs[client_email].add(cid)
+        log.info(f"Auto-paired sender {sender_id} (email={client_email}), receivers: {len(pairs.get(client_email, set()))}")
         await broadcast_status()
 
     elif msg_type == "register_receiver":
         if sender_id in clients:
             clients[sender_id]["role"] = "receiver"
+        # Auto-pair: add this receiver to all senders with same email
+        client_email = clients.get(sender_id, {}).get("email", email)
+        was_auto_paired = False
+        for cid, info in list(clients.items()):
+            if cid != sender_id and info.get("email") == client_email and info.get("role") == "sender":
+                if client_email not in pairs:
+                    pairs[client_email] = set()
+                pairs[client_email].add(sender_id)
+                was_auto_paired = True
+        log.info(f"Auto-paired receiver {sender_id} (email={client_email}, auto_paired={was_auto_paired})")
         await broadcast_status()
 
     elif msg_type == "location_data":

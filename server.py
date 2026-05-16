@@ -168,39 +168,32 @@ async def handle_message(sender_id: str, data: dict):
         total_locations += 1
         log.info(f"📍 LOCATION_DATA RECEIVED: raw={json.dumps(data, ensure_ascii=False, default=str)[:500]}")
         log.info(f"    clients={len(clients)}, pairs for {email}={list(pairs.get(email, set()))}")
-        # Kakao geocoding: address → lat/lng
-        address = data.get("address") or data.get("locationInfo") or data.get("location_info", "")
-        location_info = data.get("locationInfo", address)
-
-        if isinstance(location_info, dict):
-            location_text = location_info.get("address", str(location_info))
+        
+        # Extract location data from the nested 'data' field (LocationData object)
+        loc_obj = data.get("data", {})
+        if isinstance(loc_obj, dict):
+            address_text = loc_obj.get("addressName") or loc_obj.get("roadAddress") or loc_obj.get("locationInfo") or ""
+            location_name = loc_obj.get("locationInfo") or loc_obj.get("mapName") or loc_obj.get("addressName") or ""
         else:
-            location_text = str(location_info)
+            address_text = str(loc_obj)
+            location_name = str(loc_obj)
 
-        # Try Kakao geocoding
-        async with aiohttp.ClientSession() as session:
-            geo = await geocode_address(session, location_text)
-
-        if geo:
-            data["latitude"] = geo["latitude"]
-            data["longitude"] = geo["longitude"]
-            data["address"] = geo["address"]
-            log.info(f"Geocoded: {location_text[:30]} → ({geo['latitude']:.4f}, {geo['longitude']:.4f})")
-        else:
-            log.warning(f"Geocoding failed for: {location_text[:50]}")
-            # Nominatim fallback
+        # Kakao geocoding: address_text → lat/lng
+        geo = None
+        if address_text and address_text != "None":
             try:
                 async with aiohttp.ClientSession() as session:
-                    nom_url = f"https://nominatim.openstreetmap.org/search?q={location_text}&format=json&limit=1"
-                    async with session.get(nom_url, headers={"User-Agent": "OneClickNavi/1.0"}, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                        if resp.status == 200:
-                            nom_data = await resp.json()
-                            if nom_data:
-                                data["latitude"] = float(nom_data[0]["lat"])
-                                data["longitude"] = float(nom_data[0]["lon"])
-                                log.info(f"Nom fallback: ({data['latitude']:.4f}, {data['longitude']:.4f})")
+                    geo = await geocode_address(session, address_text)
             except Exception as e:
-                log.error(f"Nom fallback error: {e}")
+                log.error(f"Geocoding error: {e}")
+
+        if geo:
+            loc_obj["latitude"] = geo["latitude"]
+            loc_obj["longitude"] = geo["longitude"]
+            loc_obj["addressName"] = geo["address"]
+            log.info(f"Geocoded: {address_text[:30]} → ({geo['latitude']:.4f}, {geo['longitude']:.4f})")
+        else:
+            log.warning(f"Geocoding failed for: {address_text[:50]}")
 
         # Broadcast to sender's paired receivers (with app's expected format)
         sender_email = email

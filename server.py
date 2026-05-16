@@ -126,19 +126,13 @@ async def handle_message(sender_id: str, data: dict):
             ws = clients[sender_id]["ws"]
             await ws.send_json({"type": "registered", "device_id": device_id, "role": role})
 
-        # Auto-pair: pair this device with existing devices of same email
-        if role in ("sender", "receiver"):
-            paired_role = "receiver" if role == "sender" else "sender"
+        # Auto-pair: receiver adds itself to pairs[email]
+        # When sender sends location_data, server looks up pairs[sender_email] for receivers
+        if role == "receiver":
             if email not in pairs:
                 pairs[email] = set()
-            paired_count = 0
-            for cid, info in list(clients.items()):
-                if cid != sender_id and info.get("email") == email and info.get("role") == paired_role:
-                    if cid not in pairs.get(email, set()):
-                        pairs[email].add(cid)
-                        paired_count += 1
-            if paired_count > 0:
-                log.info(f"Auto-paired {role} {sender_id} -> {paired_count} {paired_role}(s) (email={email})")
+            pairs[email].add(sender_id)
+            log.info(f"Auto-paired receiver {sender_id} -> pairs[{email}] (email={email})")
 
         await broadcast_status()
 

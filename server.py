@@ -285,11 +285,128 @@ async def handle_health(request: web.Request) -> web.Response:
     })
 
 
+# ── REST API ──
+def api_ok(data=None):
+    return web.json_response({"success": True, "data": data, "message": "ok"})
+
+def api_err(msg="error"):
+    return web.json_response({"success": False, "data": None, "message": msg})
+
+async def handle_google_auth(request: web.Request) -> web.Response:
+    """POST /api/v1/auth/google — Google 로그인 처리"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    email = body.get("email", body.get("idToken", "unknown"))
+    log.info(f"Google auth: {email}")
+    # 발신/수신 여부는 WebSocket에서 결정되므로 여기선 아무 유저나 허용
+    return api_ok({
+        "access_token": f"mock_access_{uuid.uuid4().hex[:16]}",
+        "refresh_token": f"mock_refresh_{uuid.uuid4().hex[:16]}",
+        "user": {
+            "googleId": body.get("uid", "mock_google_id"),
+            "email": email,
+            "displayName": body.get("displayName", email.split("@")[0] if "@" in email else email),
+            "photoUrl": body.get("photoUrl", ""),
+            "subscriptionStatus": "active",
+            "role": "sender",
+        }
+    })
+
+async def handle_auth_refresh(request: web.Request) -> web.Response:
+    """POST /api/v1/auth/refresh — 토큰 갱신"""
+    return api_ok({
+        "access_token": f"mock_access_{uuid.uuid4().hex[:16]}",
+        "refresh_token": f"mock_refresh_{uuid.uuid4().hex[:16]}",
+    })
+
+async def handle_get_profile(request: web.Request) -> web.Response:
+    """GET /api/v1/users/me — 내 프로필"""
+    # 헤더에서 이메일 추출 시도
+    auth = request.headers.get("Authorization", "")
+    email = "user@email.com"
+    if auth and len(auth) > 10:
+        # Bearer 토큰으로 유저 찾기 생략 — mock 응답
+        pass
+    return api_ok({
+        "googleId": "mock_google_id",
+        "email": email,
+        "displayName": "사용자",
+        "photoUrl": "",
+        "subscriptionStatus": "active",
+        "role": "sender",
+    })
+
+async def handle_subscription_status(request: web.Request) -> web.Response:
+    """GET /api/v1/payments/subscription/status — 구독 상태"""
+    return api_ok({
+        "status": "active",
+        "plan": "premium",
+        "expiresAt": "2099-12-31T23:59:59Z",
+        "remainingDays": 9999,
+    })
+
+async def handle_price(request: web.Request) -> web.Response:
+    """GET /api/v1/payments/price — 가격"""
+    return api_ok({
+        "amount": 0,
+        "currency": "KRW",
+        "label": "무료",
+    })
+
+async def handle_maintenance(request: web.Request) -> web.Response:
+    """GET /api/v1/system/maintenance — 점검 상태"""
+    return api_ok({"maintenance": False})
+
+async def handle_withdraw(request: web.Request) -> web.Response:
+    """DELETE /api/v1/auth/withdraw — 회원 탈퇴"""
+    return api_ok({"withdrawn": True})
+
+async def handle_payment_action(request: web.Request) -> web.Response:
+    """POST api/v1/payments/* — 더미 결제 처리"""
+    return api_ok({"success": True, "orderId": f"order_{uuid.uuid4().hex[:12]}"})
+
+async def handle_cancel_subscription(request: web.Request) -> web.Response:
+    """POST api/v1/payments/subscription/cancel — 구독 취소"""
+    return api_ok({"cancelled": True})
+
+async def handle_api_404(request: web.Request) -> web.Response:
+    """앱에서 찾는 API가 없을 때 mock 응답"""
+    path = request.path
+    log.warning(f"Unknown API: {request.method} {path}")
+    return api_err(f"endpoint not found: {path}")
+
+
 # ── App ──
 app = web.Application()
+
+# Public
 app.router.add_get("/", handle_root)
 app.router.add_get("/health", handle_health)
 app.router.add_get("/ws", handle_websocket)
+
+# Auth
+app.router.add_post("/api/v1/auth/google", handle_google_auth)
+app.router.add_post("/api/v1/auth/refresh", handle_auth_refresh)
+app.router.add_delete("/api/v1/auth/withdraw", handle_withdraw)
+
+# User
+app.router.add_get("/api/v1/users/me", handle_get_profile)
+
+# Payment
+app.router.add_get("/api/v1/payments/price", handle_price)
+app.router.add_get("/api/v1/payments/subscription/status", handle_subscription_status)
+app.router.add_post("/api/v1/payments/confirm", handle_payment_action)
+app.router.add_post("/api/v1/payments/orders", handle_payment_action)
+app.router.add_post("/api/v1/payments/billing/issue", handle_payment_action)
+app.router.add_post("/api/v1/payments/subscription/cancel", handle_cancel_subscription)
+
+# System
+app.router.add_get("/api/v1/system/maintenance", handle_maintenance)
+
+# Catch-all for /api/v1/* routes (must be last)
+app.router.add_route("*", "/api/v1/{tail:.*}", handle_api_404)
 
 if __name__ == "__main__":
     log.info(f"Starting OneClickNavi server on {HOST}:{PORT}")

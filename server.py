@@ -321,13 +321,20 @@ h1 {{ color: #e53935; }}
 
 
 async def handle_health(request: web.Request) -> web.Response:
-    return web.json_response({
+    info = {
         "status": "running",
         "clients": len(clients),
         "devices": list(devices.keys()),
         "total_locations": total_locations,
         "uptime_seconds": (datetime.now() - start_time).seconds,
-    })
+    }
+    # Client details
+    client_info = {}
+    for cid, cdata in list(clients.items()):
+        client_info[cid] = {"email": cdata.get("email"), "role": cdata.get("role")}
+    info["client_details"] = client_info
+    info["pairs"] = {k: list(v) for k, v in pairs.items()}
+    return web.json_response(info)
 
 
 # ── REST API ──

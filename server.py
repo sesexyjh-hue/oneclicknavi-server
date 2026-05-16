@@ -184,16 +184,22 @@ async def handle_message(sender_id: str, data: dict):
                         pairs[sender_email].discard(target_id)
 
     elif msg_type == "pair":
-        # Pair sender with receiver
+        # Pair sender with all receivers sharing the same email
         sender_email = data.get("sender_email", email)
         if sender_email not in pairs:
             pairs[sender_email] = set()
-        pairs[sender_email].add(sender_id)
-        log.info(f"Paired: {sender_id} (email={sender_email})")
+        # Find all receivers with the same email and add to pair set
+        paired_count = 0
+        for cid, info in list(clients.items()):
+            if info.get("email") == sender_email and info.get("role") == "receiver":
+                if cid not in pairs[sender_email]:
+                    pairs[sender_email].add(cid)
+                    paired_count += 1
+        log.info(f"Paired sender {sender_id} -> {paired_count} receivers (email={sender_email}), total paired: {len(pairs[sender_email])}")
 
         if sender_id in clients:
             ws = clients[sender_id]["ws"]
-            await ws.send_json({"type": "paired", "sender_email": sender_email})
+            await ws.send_json({"type": "paired", "sender_email": sender_email, "receivers": paired_count})
 
         await broadcast_status()
 

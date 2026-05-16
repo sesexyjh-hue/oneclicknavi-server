@@ -206,14 +206,19 @@ async def handle_message(sender_id: str, data: dict):
             except Exception as e:
                 log.error(f"Nom fallback error: {e}")
 
-        # Broadcast to sender's paired receivers
+        # Broadcast to sender's paired receivers (with app's expected format)
         sender_email = email
         if sender_email in pairs:
+            relay_msg = {
+                "type": "location_data",
+                "googleAccount": sender_email,
+                "data": data
+            }
             for target_id in list(pairs[sender_email]):
                 if target_id in clients:
                     target_ws = clients[target_id]["ws"]
                     try:
-                        await target_ws.send_json(data)
+                        await target_ws.send_json(relay_msg)
                     except Exception as e:
                         log.error(f"Broadcast error to {target_id}: {e}")
                         pairs[sender_email].discard(target_id)
@@ -266,14 +271,14 @@ async def handle_message(sender_id: str, data: dict):
 
 
 async def broadcast_status():
-    """Broadcast sender counts to all clients."""
+    """Broadcast receiver count to all clients (app expects 'receiver_count' type)."""
     for cid, info in list(clients.items()):
         if info.get("ws") and not info["ws"].closed:
             ws = info["ws"]
             try:
                 email = info["email"]
                 count = len(pairs.get(email, set()))
-                await ws.send_json({"type": "status", "connected_clients": len(clients), "my_receivers": count})
+                await ws.send_json({"type": "receiver_count", "count": count})
             except Exception:
                 pass
 

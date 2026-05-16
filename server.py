@@ -166,6 +166,8 @@ async def handle_message(sender_id: str, data: dict):
 
     elif msg_type == "location_data":
         total_locations += 1
+        log.info(f"📍 LOCATION_DATA RECEIVED: raw={json.dumps(data, ensure_ascii=False, default=str)[:500]}")
+        log.info(f"    clients={len(clients)}, pairs for {email}={list(pairs.get(email, set()))}")
         # Kakao geocoding: address → lat/lng
         address = data.get("address") or data.get("locationInfo") or data.get("location_info", "")
         location_info = data.get("locationInfo", address)
@@ -325,10 +327,36 @@ async def handle_health(request: web.Request) -> web.Response:
     # Client details
     client_info = {}
     for cid, cdata in list(clients.items()):
-        client_info[cid] = {"email": cdata.get("email"), "role": cdata.get("role")}
+        connected = True
+        if cdata.get("ws"):
+            try:
+                connected = not cdata["ws"].closed
+            except:
+                connected = True
+        client_info[cid] = {"email": cdata.get("email"), "role": cdata.get("role"), "connected": connected}
     info["client_details"] = client_info
     info["pairs"] = {k: list(v) for k, v in pairs.items()}
+    info["recent_logs"] = list(_ring.buffer[-50:])
     return web.json_response(info)
+
+
+# In-memory log ring buffer
+recent_logs: list = []
+import logging as _logging
+
+class RingBufferHandler(_logging.Handler):
+    def __init__(self, maxlen=100):
+        super().__init__()
+        self.buffer = []
+        self.maxlen = maxlen
+    def emit(self, record):
+        self.buffer.append(self.format(record))
+        if len(self.buffer) > self.maxlen:
+            self.buffer.pop(0)
+
+_ring = RingBufferHandler()
+_ring.setFormatter(_logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+logging.getLogger().addHandler(_ring)
 
 
 # ── REST API ──

@@ -172,8 +172,8 @@ async def handle_message(sender_id: str, data: dict):
         # Extract location data from the nested 'data' field (LocationData object)
         loc_obj = data.get("data", {})
         if isinstance(loc_obj, dict):
-            address_text = loc_obj.get("addressName") or loc_obj.get("roadAddress") or loc_obj.get("locationInfo") or ""
-            location_name = loc_obj.get("locationInfo") or loc_obj.get("mapName") or loc_obj.get("addressName") or ""
+            address_text = loc_obj.get("endPoint") or loc_obj.get("locationInfo") or loc_obj.get("roadAddress") or loc_obj.get("addressName") or ""
+            location_name = loc_obj.get("locationInfo") or loc_obj.get("mapName") or loc_obj.get("endPoint") or ""
         else:
             address_text = str(loc_obj)
             location_name = str(loc_obj)

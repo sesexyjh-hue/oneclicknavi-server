@@ -209,10 +209,15 @@ async def handle_message(sender_id: str, data: dict):
         # Broadcast to sender's paired receivers (with app's expected format)
         sender_email = email
         if sender_email in pairs:
+            # Extract nested data from sender's message
+            nested_data = data.get("data", data)
+            # Remove protocol fields that shouldn't be in relay
+            if isinstance(nested_data, dict):
+                nested_data.pop("type", None)
             relay_msg = {
                 "type": "location_data",
                 "googleAccount": sender_email,
-                "data": data
+                "data": nested_data
             }
             for target_id in list(pairs[sender_email]):
                 if target_id in clients:

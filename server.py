@@ -103,14 +103,15 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
 async def handle_message(sender_id: str, data: dict):
     global total_locations
     msg_type = data.get("type", "unknown")
-    email = data.get("email", "unknown")
-    device_id = data.get("device_id", sender_id)
+    email = data.get("email") or data.get("googleAccount", "unknown")
+    device_id = data.get("device_id") or data.get("deviceId", sender_id)
 
     # Update client info
     if sender_id in clients:
         clients[sender_id]["email"] = email
 
-    log.info(f"Msg [{sender_id}]: type={msg_type}, email={email}")
+    log.info(f"Msg [{sender_id}]: type={msg_type}, email={email}, role={data.get('role', 'none')}")
+    log.info(f"RAW MSG: {json.dumps(data, ensure_ascii=False)[:300]}")
 
     if msg_type == "register":
         # Register device as sender/receiver

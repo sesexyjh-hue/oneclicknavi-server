@@ -14,7 +14,9 @@ from aiohttp import web
 # ── 설정 ──
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8090"))
-KAKAO_REST_KEY = os.environ.get("KAKAO_REST_KEY", "ea87c8a2c04fdf83b5bbdd1fc2f31efa")
+KAKAO_REST_KEY = os.environ.get("KAKAO_REST_KEY", "")
+if not KAKAO_REST_KEY:
+    log.warning("KAKAO_REST_KEY 환경변수가 설정되지 않았습니다. 카카오 지오코딩이 동작하지 않습니다.")
 KAKAO_GEOCODE_URL = "https://dapi.kakao.com/v2/local/search/address.json"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
